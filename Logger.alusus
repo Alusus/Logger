@@ -1,0 +1,54 @@
+import "Srl/String";
+import "Srl/StringBuilder";
+import "Srl/Console";
+import "/home/hisham-mahgoub/Alusus_orgnization/Alusus/Sources/Srt/Srl/Time";
+
+module Logger {
+    use Srl;
+
+    func _appendEscaped(out: ref[StringBuilder], str: ptr[array[Char]]): Void {
+        def i: ArchInt = 0;
+        while str~cnt(i) != 0 {
+            def c: Char = str~cnt(i);
+            if c == '"' out += "\\\""
+            else if c == '\\' out += "\\\\"
+            else if c == '\n' out += "\\n"
+            else if c == '\r' out += "\\r"
+            else if c == '\t' out += "\\t"
+            else if c < ' ' {
+                def esc: array[Char, 8];
+                String.assign(esc(0)~ptr, "\\u%04x", c~cast[Int]);
+                out += esc(0)~ptr~cast[CharsPtr];
+            } else out += c;
+            ++i;
+        }
+    }
+
+    func _log(levelName: ptr[array[Char]], message: ptr[array[Char]]): Void {
+        def time: String = Time.getCurrentStringUTCDateTime();
+        
+        def escapedMessage: StringBuilder;
+        _appendEscaped(escapedMessage, message);
+        Console.print(
+            "time=%s level=%s message=\"%s\"\n",
+            time.buf, levelName, escapedMessage.string.buf
+        );
+
+    }
+
+    func error(message: ptr[array[Char]]): Void {
+        _log("error", message);
+    }
+
+    func warning(message: ptr[array[Char]]): Void {
+        _log("warn", message);
+    }
+
+    func info(message: ptr[array[Char]]): Void {
+        _log("info", message);
+    }
+
+    func debug(message: ptr[array[Char]]): Void {
+        _log("debug", message);
+    }
+}
