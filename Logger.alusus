@@ -9,6 +9,13 @@ import "Srl/Time";
 module Logger {
     use Srl;
 
+    def _useLocalTime: Bool = false;
+
+    // UTC (+00:00) is the default. Pass true to print local time with its offset instead.
+    func useLocalTime(enabled: Bool) {
+        _useLocalTime = enabled;
+    }
+
     class Entry {
         def buf: StringBuilder;
         def error: SrdRef[Error];
@@ -16,7 +23,9 @@ module Logger {
         handler this~init() {}
 
         handler this~init(levelName: ptr[array[Char]]) {
-            def time: String = Time.getCurrentStringUTCDateTime();
+            def time: String;
+            if _useLocalTime time = Time.getCurrentStringLocalDateTime()
+            else time = Time.getCurrentStringUTCDateTime();
             this.buf.format("time=%s level=%s", time.buf, levelName);
         }
 
