@@ -9,29 +9,62 @@ import "Srl/Time";
 module Logger {
     use Srl;
 
+    module Level {
+        def ERROR: 40;
+        def WARNING: 30;
+        def INFO: 20;
+        def DEBUG: 10;
+    }
+
     def _useLocalTime: Bool = false;
+    def _logLevel: Int = Level.INFO;
 
     // UTC (+00:00) is the default. Pass true to print local time with its offset instead.
-    func useLocalTime(enabled: Bool) {
+    func useLocalTime(enabled: Bool): Void {
         _useLocalTime = enabled;
+    }
+
+    // Entries below this level are not printed. Unknown values are ignored.
+    func setLevel(level: Int): Void {
+        if level == Level.DEBUG or level == Level.INFO or level == Level.WARNING or level == Level.ERROR {
+            _logLevel = level;
+        }
+    }
+
+    func _levelName(level: Int): CharsPtr {
+        if level == Level.ERROR return "error";
+        if level == Level.WARNING return "warn";
+        if level == Level.INFO return "info";
+        return "debug";
     }
 
     class Entry {
         def buf: StringBuilder;
         def error: SrdRef[Error];
+        def level: Int;
+        // Set when the level is below _logLevel, so the field calls skip building text.
+        def skip: Bool;
 
-        handler this~init() {}
+        handler this~init() {
+            this.level = Level.INFO;
+            this.skip = true;
+        }
 
-        handler this~init(levelName: ptr[array[Char]]) {
+        handler this~init(level: Int) {
+            this.level = level;
+            this.skip = level < _logLevel;
+            if this.skip return;
             def time: String;
             if _useLocalTime time = Time.getCurrentStringLocalDateTime()
             else time = Time.getCurrentStringUTCDateTime();
-            this.buf.format("time=%s level=%s", time.buf, levelName);
+            this.buf.format("time=%s level=%s", time.buf, _levelName(level));
         }
 
         handler this~init(e: ref[Entry]) {
             this.buf += e.buf.string.buf;
             this.error = e.error;
+            this.level = e.level;
+            this.skip = e.skip;
         }
 
         handler this._appendEscaped(str: ptr[array[Char]]) {
@@ -92,6 +125,7 @@ module Logger {
         }
 
         handler this.str(key: ptr[array[Char]], val: ptr[array[Char]]): ref[Entry] {
+            if this.skip return this;
             this._appendKey(key);
             if _needsQuotes(val) {
                 this.buf += '"';
@@ -102,18 +136,21 @@ module Logger {
         }
 
         handler this.num(key: ptr[array[Char]], val: Int[64]): ref[Entry] {
+            if this.skip return this;
             this._appendKey(key);
             this.buf += val;
             return this;
         }
 
         handler this.num(key: ptr[array[Char]], val: Float[64]): ref[Entry] {
+            if this.skip return this;
             this._appendKey(key);
             this.buf += val;
             return this;
         }
 
         handler this.bool(key: ptr[array[Char]], val: Bool): ref[Entry] {
+            if this.skip return this;
             this._appendKey(key);
             if val this.buf += "true" else this.buf += "false";
             return this;
@@ -125,24 +162,24 @@ module Logger {
 
         // Prints the record. Returns the first key error, or a null ref if there was none.
         handler this.send(): SrdRef[Error] {
-            Console.print("%s\n", this.buf.string.buf);
+            if not this.skip Console.print("%s\n", this.buf.string.buf);
             return this.error;
         }
     }
 
     func error(): Entry {
-        return Entry("error");
+        return Entry(Level.ERROR);
     }
 
     func warning(): Entry {
-        return Entry("warn");
+        return Entry(Level.WARNING);
     }
 
     func info(): Entry {
-        return Entry("info");
+        return Entry(Level.INFO);
     }
 
     func debug(): Entry {
-        return Entry("debug");
+        return Entry(Level.DEBUG);
     }
 }
