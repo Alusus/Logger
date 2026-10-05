@@ -22,7 +22,7 @@ Import the library as follows:
 
 ```
 import "Apm";
-Apm.importPackage("Alusus/Logger@1.0");
+Apm.importPackage("Alusus/Logger@0.1");
 ```
 
 ## Usage

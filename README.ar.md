@@ -30,14 +30,14 @@ time=2026-10-05T11:40:48+00:00 level=info user=Hisham age=22 message="logged in"
 
 ```
 اشمل "مـحا"؛
-مـحا.اشمل_حزمة("Alusus/Logger@1.0"، "مـسجل.alusus")؛
+مـحا.اشمل_حزمة("Alusus/Logger@0.1"، "مـسجل.alusus")؛
 ```
 
 <div dir=ltr>
 
 ```
 import "Apm";
-Apm.importPackage("Alusus/Logger@1.0");
+Apm.importPackage("Alusus/Logger@0.1");
 ```
 
 </div>
