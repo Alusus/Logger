@@ -1,0 +1,185 @@
+import "Srl/String";
+import "Srl/StringBuilder";
+import "Srl/Console";
+import "Srl/Memory";
+import "Srl/refs";
+import "Srl/errors";
+import "Srl/Time";
+
+module Logger {
+    use Srl;
+
+    module Level {
+        def ERROR: 40;
+        def WARNING: 30;
+        def INFO: 20;
+        def DEBUG: 10;
+    }
+
+    def _useLocalTime: Bool = false;
+    def _logLevel: Int = Level.INFO;
+
+    // UTC (+00:00) is the default. Pass true to print local time with its offset instead.
+    func useLocalTime(enabled: Bool): Void {
+        _useLocalTime = enabled;
+    }
+
+    // Entries below this level are not printed. Unknown values are ignored.
+    func setLevel(level: Int): Void {
+        if level == Level.DEBUG or level == Level.INFO or level == Level.WARNING or level == Level.ERROR {
+            _logLevel = level;
+        }
+    }
+
+    func _levelName(level: Int): CharsPtr {
+        if level == Level.ERROR return "error";
+        if level == Level.WARNING return "warn";
+        if level == Level.INFO return "info";
+        return "debug";
+    }
+
+    class Entry {
+        def buf: StringBuilder;
+        def error: SrdRef[Error];
+        def level: Int;
+        // Set when the level is below _logLevel, so the field calls skip building text.
+        def skip: Bool;
+
+        handler this~init() {
+            this.level = Level.INFO;
+            this.skip = true;
+        }
+
+        handler this~init(level: Int) {
+            this.level = level;
+            this.skip = level < _logLevel;
+            if this.skip return;
+            def time: String;
+            if _useLocalTime time = Time.getCurrentStringLocalDateTime()
+            else time = Time.getCurrentStringUTCDateTime();
+            this.buf.format("time=%s level=%s", time.buf, _levelName(level));
+        }
+
+        handler this~init(e: ref[Entry]) {
+            this.buf += e.buf.string.buf;
+            this.error = e.error;
+            this.level = e.level;
+            this.skip = e.skip;
+        }
+
+        handler this._appendEscaped(str: ptr[array[Char]]) {
+            def i: ArchInt = 0;
+            while str~cnt(i) != 0 {
+                def c: Char = str~cnt(i);
+                if c == '"' this.buf += "\\\""
+                else if c == '\\' this.buf += "\\\\"
+                else if c == '\n' this.buf += "\\n"
+                else if c == '\r' this.buf += "\\r"
+                else if c == '\t' this.buf += "\\t"
+                else if c < ' ' {
+                    def esc: array[Char, 8];
+                    String.assign(esc(0)~ptr, "\\u%04x", c~cast[Int]);
+                    this.buf += esc(0)~ptr~cast[CharsPtr];
+                } else this.buf += c;
+                ++i;
+            }
+        }
+
+        // A value needs quotes if it is empty or has a char that would break the key=value format.
+        func _needsQuotes(str: ptr[array[Char]]): Bool {
+            if str~cnt(0) == 0 return true;
+            def i: ArchInt = 0;
+            while str~cnt(i) != 0 {
+                def c: Char = str~cnt(i);
+                if c == ' ' or c == '=' or c == '"' or c == '\\' or c < ' ' or c~cast[Int] == 127 return true;
+                ++i;
+            }
+            return false;
+        }
+
+        // Invalid chars (spaces, control chars, '=' and '"') are replaced by '_' and the
+        // first such problem is kept in `error`, which send() returns.
+        handler this._appendKey(key: ptr[array[Char]]) {
+            this.buf += ' ';
+            if key~cnt(0) == 0 {
+                this.buf += '_';
+                this._setError("Logger: empty key replaced by '_'");
+            } else {
+                def invalid: Bool = false;
+                def i: ArchInt = 0;
+                while key~cnt(i) != 0 {
+                    def c: Char = key~cnt(i);
+                    if c == ' ' or c == '=' or c == '"' or c < ' ' or c~cast[Int] == 127 {
+                        this.buf += '_';
+                        invalid = true;
+                    } else this.buf += c;
+                    ++i;
+                }
+                if invalid this._setError("Logger: invalid chars in key replaced by '_'");
+            }
+            this.buf += '=';
+        }
+
+        handler this._setError(message: ptr[array[Char]]) {
+            if this.error.isNull() this.error = GenericError.new(String("LOGGER_INVALID_KEY"), String(message));
+        }
+
+        handler this.str(key: ptr[array[Char]], val: ptr[array[Char]]): ref[Entry] {
+            if this.skip return this;
+            this._appendKey(key);
+            if _needsQuotes(val) {
+                this.buf += '"';
+                this._appendEscaped(val);
+                this.buf += '"';
+            } else this.buf += val;
+            return this;
+        }
+
+        handler this.num(key: ptr[array[Char]], val: Int[64]): ref[Entry] {
+            if this.skip return this;
+            this._appendKey(key);
+            this.buf += val;
+            return this;
+        }
+
+        handler this.num(key: ptr[array[Char]], val: Float[64]): ref[Entry] {
+            if this.skip return this;
+            this._appendKey(key);
+            this.buf += val;
+            return this;
+        }
+
+        handler this.bool(key: ptr[array[Char]], val: Bool): ref[Entry] {
+            if this.skip return this;
+            this._appendKey(key);
+            if val this.buf += "true" else this.buf += "false";
+            return this;
+        }
+
+        handler this.msg(message: ptr[array[Char]]): ref[Entry] {
+            return this.str("message", message);
+        }
+
+        // Prints the record. Returns the first key error, or a null ref if there was none.
+        handler this.send(): SrdRef[Error] {
+            if not this.skip Console.print("%s\n", this.buf.string.buf);
+            return this.error;
+        }
+    }
+
+    func error(): Entry {
+        return Entry(Level.ERROR);
+    }
+
+    func warning(): Entry {
+        return Entry(Level.WARNING);
+    }
+
+    func info(): Entry {
+        return Entry(Level.INFO);
+    }
+
+    func debug(): Entry {
+        return Entry(Level.DEBUG);
+    }
+}
