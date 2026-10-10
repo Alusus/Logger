@@ -6,15 +6,17 @@ A logging library for Alusus. It writes every log record as a single line in `lo
 `key=value` pairs:
 
 ```
-time=2026-10-05T11:40:48+00:00 level=info userName=Hisham age=22 message="logged in"
+time=2026-10-05T11:40:48+00:00 level=info message="logged in" user=hisham age=22
 ```
 
-Every record starts with two keys:
+Every record starts with three keys:
 
 * `time`: when the record was written, in RFC 3339 format.
-* `level`: the level of the record: `error`, `warn`, `info` or `debug`.
+* `level`: the level of the record: `error`, `warning`, `info` or `debug`.
+* `message`: the message of the record.
 
-After them come the keys you add yourself, in the order you add them.
+After them come the [global properties](#global-properties) of the logger, then the properties you add to the record,
+in the order you add them.
 
 ## Adding to the Project
 
@@ -27,95 +29,99 @@ Apm.importPackage("Alusus/Logger@0.1");
 
 ## Usage
 
-Start a record by calling the function of the level you want, chain the fields you want to add, then call `send` to
-print it:
+Create a `Logger` object, then log through its level macros: `error`, `warning`, `info` and `debug`. Each macro takes
+a message and, optionally, the properties of the record:
 
 ```
-Logger.info()
-    .str("user", "hisham")
-    .num("age", 22)
-    .bool("admin", true)
-    .msg("logged in")
-    .send();
+def logger: Logger;
+logger.info["logged in", { user: "hisham", age: 22, admin: true }];
 ```
 
 ```
-time=2026-10-05T11:40:48+00:00 level=info user=hisham age=22 admin=true message="logged in"
+time=2026-10-05T11:40:48+00:00 level=info message="logged in" user=hisham age=22 admin=true
 ```
 
-The record is printed only when `send` is called, so a chain that does not end with `send` prints nothing.
+The record is printed immediately. Records below the logger's [log level](#loglevel) are dropped.
 
-## Global Functions
+Every `Logger` object has its own settings (level, time zone and global properties).
 
-### error
+### Properties
 
-```
-func error(): Entry;
-```
-
-Starts a record with `level=error`.
-
-### warning
+The properties argument can be written in any of the following forms:
 
 ```
-func warning(): Entry;
+logger.info["msg", { a: 1, b: "text" }];   // curly brackets
+logger.info["msg", (a: 1, b: "text")];     // parentheses
+logger.info["msg", a: 1];                  // a single property
 ```
 
-Starts a record with `level=warn`.
+A key is either an identifier or a string literal (for example `"my key"`). Anything else (such as `1: x`) is a
+compile error. The supported value types are:
 
-### info
-
-```
-func info(): Entry;
-```
-
-Starts a record with `level=info`.
-
-### debug
+* Text (`ptr[array[Char]]`).
+* Integers (`Int[64]`), printed as they are.
+* Floats (`Float[64]`), printed with 6 decimal places, so `0.5` is printed as `0.500000`.
+* `Bool`, printed as `true` or `false`. Note that the literals `1` and `0` are matched to `Bool`, not to integer.
+* `Error` objects, which add two properties: `<key>.code` and `<key>.msg`.
 
 ```
-func debug(): Entry;
+def err: SrdRef[GenericError] = GenericError.new("E100", "something went wrong");
+logger.error["failed", (error: err, extra: "value")];
 ```
 
-Starts a record with `level=debug`.
-
-### setLevel
-
 ```
-func setLevel(level: Int): Void;
+time=2026-10-05T11:40:48+00:00 level=error message=failed error.code=E100 error.msg="something went wrong" extra=value
 ```
 
-Sets the lowest level that is printed. Records below this level are dropped, and their field calls do no work.
-The default is `Level.INFO`.
+### Global Properties
 
-* `level` one of the values of [Level](#level). Any other value is ignored and the current level stays as it is.
-
-```
-Logger.setLevel(Logger.Level.WARNING);
-Logger.info().msg("not printed").send();
-Logger.warning().msg("printed").send();
-```
-
-### useLocalTime
+Global properties are added to every record the logger writes afterwards. Add them with `set`, either as a function
+call for a single property or as a macro that takes the same forms as the record properties:
 
 ```
-func useLocalTime(enabled: Bool): Void;
+logger.set("service", "billing");
+logger.set[port: 8080];
+logger.set[{ region: "eu", replicas: 3 }];
+
+logger.info["started"];
 ```
 
-Chooses the time zone of the `time` key. The setting applies to every record started after the call.
-
-* `enabled` when `true`, the time is printed in local time with its offset. When `false` (the default), it is
-  printed in UTC with the offset `+00:00`.
-
 ```
-time=2026-10-05T11:40:48+00:00     // UTC (default)
-time=2026-10-05T14:40:48+03:00     // local time
+time=2026-10-05T11:40:48+00:00 level=info message=started service=billing port=8080 region=eu replicas=3
 ```
 
-## Level
+Setting the same key twice adds it twice. To remove all the global properties, call `clear`:
 
 ```
-module Level {
+logger.clear();
+```
+
+## Logger
+
+```
+class Logger {
+    def Level: { ERROR, WARNING, INFO, DEBUG }
+    def useLocalTime: Bool;
+    handler this.logLevel: Int;
+    handler this.logLevel = Int;
+    func levelName(level: Int): CharsPtr;
+    handler this.set(key: CharsPtr, val: CharsPtr);
+    handler this.set(key: CharsPtr, val: Int[64]);
+    handler this.set(key: CharsPtr, val: Float[64]);
+    handler this.set(key: CharsPtr, val: Bool);
+    macro set[this, props];
+    handler this.clear();
+    macro error[this, msg] / error[this, msg, props];
+    macro warning[this, msg] / warning[this, msg, props];
+    macro info[this, msg] / info[this, msg, props];
+    macro debug[this, msg] / debug[this, msg, props];
+}
+```
+
+### Level
+
+```
+def Level: {
     def ERROR: 40;
     def WARNING: 30;
     def INFO: 20;
@@ -123,96 +129,111 @@ module Level {
 }
 ```
 
-The log levels, from the most important to the least. They are used with `setLevel`.
+The log levels, from the most important to the least. They are used with `logLevel`.
+
+### logLevel
+
+```
+handler this.logLevel: Int;
+handler this.logLevel = Int;
+```
+
+The lowest level that is printed. Records below this level are dropped. The default is `Level.INFO`.
+Assigning a value that is not one of the values of [Level](#level) is ignored and the current level stays as it is.
+
+```
+logger.logLevel = Logger.Level.WARNING;
+logger.info["not printed"];
+logger.warning["printed"];
+```
+
+### useLocalTime
+
+```
+def useLocalTime: Bool;
+```
+
+Chooses the time zone of the `time` key. It applies to every record written after changing it. When `true`, the time
+is printed in local time with its offset. When `false` (the default), it is printed in UTC with the offset `+00:00`.
+
+```
+time=2026-10-05T11:40:48+00:00     // UTC (default)
+time=2026-10-05T14:40:48+03:00     // local time
+```
+
+### levelName
+
+```
+func levelName(level: Int): CharsPtr;
+```
+
+Returns the name of the level as it is printed in the `level` key: `error`, `warning`, `info` or `debug`.
+
+### set
+
+```
+handler this.set(key: CharsPtr, val: CharsPtr);
+handler this.set(key: CharsPtr, val: Int[64]);
+handler this.set(key: CharsPtr, val: Float[64]);
+handler this.set(key: CharsPtr, val: Bool);
+macro set[this, props];
+```
+
+Adds a [global property](#global-properties). See [Keys](#keys) and [Values](#values) for how they are printed.
+
+### clear
+
+```
+handler this.clear();
+```
+
+Removes all the [global properties](#global-properties) added with `set`. Records written afterwards contain only their
+own properties.
+
+### error, warning, info, debug
+
+```
+macro error[this, msg];
+macro error[this, msg, props];
+```
+
+(and the same for `warning`, `info` and `debug`.) Write a record with the corresponding level.
+
+* `msg` the message of the record.
+* `props` the properties of the record. See [Properties](#properties).
 
 ## Entry
 
 ```
 class Entry {
-    handler this.str(key: ptr[array[Char]], val: ptr[array[Char]]): ref[Entry];
-    handler this.num(key: ptr[array[Char]], val: Int[64]): ref[Entry];
-    handler this.num(key: ptr[array[Char]], val: Float[64]): ref[Entry];
-    handler this.bool(key: ptr[array[Char]], val: Bool): ref[Entry];
-    handler this.msg(message: ptr[array[Char]]): ref[Entry];
-    handler this.send(): SrdRef[Error];
+    handler this~init(logger: ref[Logger], level: Int, msg: CharsPtr);
+    handler this.set(key: CharsPtr, val: CharsPtr);
+    handler this.set(key: CharsPtr, val: Int[64]);
+    handler this.set(key: CharsPtr, val: Float[64]);
+    handler this.set(key: CharsPtr, val: Bool);
+    handler this.set(key: CharsPtr, val: ref[Error]);
+    handler this.send();
 }
 ```
 
-A single log record. You get it from `error`, `warning`, `info` or `debug`, which fill in the `time` and `level`
-keys. Every field function returns a reference to the same record, so calls can be chained. The record is meant to
-be used within a single statement that ends with `send`.
-
-### str
+A single log record. The level macros create one, add the properties to it and send it, so you normally don't need
+this class. You can use it directly to build a record in several steps:
 
 ```
-handler this.str(key: ptr[array[Char]], val: ptr[array[Char]]): ref[Entry];
+def entry: Logger.Entry(logger, Logger.Level.INFO, "manual entry");
+entry.set("n", 42);
+entry.send();
 ```
 
-Adds a text field. See [Values](#values) for when the value is put between quotes.
-
-* `key` the name of the field. See [Keys](#keys).
-* `val` the value of the field.
-
-### num
-
-```
-handler this.num(key: ptr[array[Char]], val: Int[64]): ref[Entry];
-handler this.num(key: ptr[array[Char]], val: Float[64]): ref[Entry];
-```
-
-Adds a number field. Integers are printed as they are. Floats are printed with 6 decimal places, so `0.5` is printed
-as `0.500000`.
-
-* `key` the name of the field. See [Keys](#keys).
-* `val` the number.
-
-### bool
-
-```
-handler this.bool(key: ptr[array[Char]], val: Bool): ref[Entry];
-```
-
-Adds a field whose value is `true` or `false`.
-
-* `key` the name of the field. See [Keys](#keys).
-* `val` the value.
-
-### msg
-
-```
-handler this.msg(message: ptr[array[Char]]): ref[Entry];
-```
-
-Adds the main message of the record under the key `message`. It is the same as `str("message", message)`.
-
-### send
-
-```
-handler this.send(): SrdRef[Error];
-```
-
-Prints the record as one line. Returns the first problem found in the keys of the record, or a null reference if
-all the keys were valid. The record is printed in both cases. See [Keys](#keys).
-
-```
-def err: SrdRef[Error] = Logger.info().str("user name", "ali").send();
-if not err.isNull() Logger.error.msg(err.getMessage().buf).send();
-```
-
-```
-time=2026-10-05T11:40:48+00:00 level=info user_name=ali
-Logger: invalid chars in key replaced by '_'
-```
-
-The error has the code `LOGGER_INVALID_KEY`. If the record was dropped by `setLevel`, its keys are not checked and
-`send` returns a null reference.
+The record is printed only when `send` is called. Creating an `Entry` starts the record in the logger's buffer, so
+finish (`send`) one entry before starting another one on the same logger.
 
 ## Output Format
 
 ### Keys
 
 A key must not contain spaces, control characters, `=` or `"`. If it does, each of these characters is replaced by
-`_`, and `send` returns an error. An empty key is printed as `_` and also makes `send` return an error.
+`_`. An empty key is printed as `_`.
 
 ### Values
 
@@ -221,9 +242,15 @@ that case it is put between double quotes, and the characters that would break t
 every record is exactly one line.
 
 ```
-Logger.info().str("path", "/tmp/my file").str("empty", "").str("quote", "say \"hi\"").send();
+logger.info["quoting", { path: "/tmp/my file", empty: "", quote: "say \"hi\"" }];
 ```
 
 ```
-time=2026-10-05T11:40:48+00:00 level=info path="/tmp/my file" empty="" quote="say \"hi\""
+time=2026-10-05T11:40:48+00:00 level=info message=quoting path="/tmp/my file" empty="" quote="say \"hi\""
 ```
+
+## Examples
+
+See the [Examples](Examples) directory for an example that covers all the supported use cases, in English and in
+Arabic. `Examples/test.alusus` runs them and compares the output with `Examples/expected_result.output`, ignoring
+timestamps and file paths.
