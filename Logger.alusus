@@ -1,185 +1,271 @@
 import "Srl/String";
 import "Srl/StringBuilder";
 import "Srl/Console";
-import "Srl/Memory";
-import "Srl/refs";
-import "Srl/errors";
 import "Srl/Time";
+import "Srl/errors";
+import "Srl/Map";
+import "Core/Ast";
+import "Spp";
+import "Apm";
+Apm.importPackage("Alusus/Sle@0.2", { "Srl/Time" });
 
-module Logger {
+class Logger {
     use Srl;
 
-    module Level {
+    def Level: {
         def ERROR: 40;
         def WARNING: 30;
         def INFO: 20;
         def DEBUG: 10;
     }
 
-    def _useLocalTime: Bool = false;
-    def _logLevel: Int = Level.INFO;
+    def globalBuf: StringBuilder;
+    def buf: StringBuilder;
 
     // UTC (+00:00) is the default. Pass true to print local time with its offset instead.
-    func useLocalTime(enabled: Bool): Void {
-        _useLocalTime = enabled;
-    }
+    def useLocalTime: Bool = false;
 
     // Entries below this level are not printed. Unknown values are ignored.
-    func setLevel(level: Int): Void {
-        if level == Level.DEBUG or level == Level.INFO or level == Level.WARNING or level == Level.ERROR {
-            _logLevel = level;
+    def _logLevel: Int = Level.INFO;
+    handler this.logLevel = Int {
+        if value == Level.DEBUG or value == Level.INFO or value == Level.WARNING or value == Level.ERROR {
+            this._logLevel = value;
         }
+        return this._logLevel;
     }
+    handler this.logLevel: Int return this._logLevel;
 
-    func _levelName(level: Int): CharsPtr {
+    func levelName(level: Int): CharsPtr {
         if level == Level.ERROR return "error";
-        if level == Level.WARNING return "warn";
+        if level == Level.WARNING return "warning";
         if level == Level.INFO return "info";
         return "debug";
     }
 
+    // Global Data Functions
+    //======================
+
+    handler this.set(key: CharsPtr, val: CharsPtr) {
+        _appendKey(this.globalBuf, key);
+        if _needsQuotes(val) {
+            this.globalBuf += '"';
+            _appendEscaped(this.globalBuf, val);
+            this.globalBuf += '"';
+        } else this.globalBuf += val;
+    }
+
+    handler this.set(key: CharsPtr, val: Int[64]) {
+        _appendKey(this.globalBuf, key);
+        this.globalBuf += val;
+    }
+
+    handler this.set(key: CharsPtr, val: Float[64]) {
+        _appendKey(this.globalBuf, key);
+        this.globalBuf += val;
+    }
+
+    handler this.set(key: CharsPtr, val: Bool) {
+        _appendKey(this.globalBuf, key);
+        if val this.globalBuf += "true" else this.globalBuf += "false";
+    }
+
+    @member macro set[this, props] this.{
+        preprocess { Logger._insertProps(ast props) }
+    }
+
+    handler this.clear() {
+        this.globalBuf.clear();
+    }
+
+    // Buffer Functions
+    //=================
+
+    // A value needs quotes if it is empty or has a char that would break the key=value format.
+    func _needsQuotes(str: CharsPtr): Bool {
+        if str~cnt(0) == 0 return true;
+        def i: ArchInt = 0;
+        while str~cnt(i) != 0 {
+            def c: Char = str~cnt(i);
+            if c == ' ' or c == '=' or c == '"' or c == '\\' or c < ' ' or c~cast[Int] == 127 return true;
+            ++i;
+        }
+        return false;
+    }
+
+    func _appendKey(buf: ref[StringBuilder], key: CharsPtr) {
+        _appendKey(buf, key, 0);
+    }
+
+    func _appendKey(buf: ref[StringBuilder], key: CharsPtr, subKey: CharsPtr) {
+        buf += ' ';
+        if key~cnt(0) == 0 {
+            buf += '_';
+        } else {
+            def i: ArchInt = 0;
+            while key~cnt(i) != 0 {
+                def c: Char = key~cnt(i);
+                if c == ' ' or c == '=' or c == '"' or c < ' ' or c~cast[Int] == 127 {
+                    buf += '_';
+                } else buf += c;
+                ++i;
+            }
+        }
+        if subKey != 0 buf += subKey;
+        buf += '=';
+    }
+
+    func _appendEscaped(buf: ref[StringBuilder], str: CharsPtr) {
+        def i: ArchInt = 0;
+        while str~cnt(i) != 0 {
+            def c: Char = str~cnt(i);
+            if c == '"' buf += "\\\""
+            else if c == '\\' buf += "\\\\"
+            else if c == '\n' buf += "\\n"
+            else if c == '\r' buf += "\\r"
+            else if c == '\t' buf += "\\t"
+            else if c < ' ' {
+                def esc: array[Char, 8];
+                String.assign(esc(0)~ptr, "\\u%04x", c~cast[Int]);
+                buf += esc(0)~ptr~cast[CharsPtr];
+            } else buf += c;
+            ++i;
+        }
+    }
+
+    // Entry helper class
+    //===================
+
     class Entry {
-        def buf: StringBuilder;
-        def error: SrdRef[Error];
+        def logger: ref[Logger];
         def level: Int;
-        // Set when the level is below _logLevel, so the field calls skip building text.
-        def skip: Bool;
 
-        handler this~init() {
-            this.level = Level.INFO;
-            this.skip = true;
-        }
-
-        handler this~init(level: Int) {
+        handler this~init(logger: ref[Logger], level: Int, msg: CharsPtr) {
+            this.logger~no_deref = logger;
             this.level = level;
-            this.skip = level < _logLevel;
-            if this.skip return;
             def time: String;
-            if _useLocalTime time = Time.getCurrentStringLocalDateTime()
+            if this.level < this.logger.logLevel return;
+
+            this.logger.buf.clear();
+            if this.logger.useLocalTime time = Time.getCurrentStringLocalDateTime()
             else time = Time.getCurrentStringUTCDateTime();
-            this.buf.format("time=%s level=%s", time.buf, _levelName(level));
+            this.logger.buf.format("time=%s level=%s", time.buf, levelName(level));
+            this.set("message", msg)
+            this.logger.buf += this.logger.globalBuf;
         }
 
-        handler this~init(e: ref[Entry]) {
-            this.buf += e.buf.string.buf;
-            this.error = e.error;
-            this.level = e.level;
-            this.skip = e.skip;
-        }
+        handler this.set(key: CharsPtr, val: CharsPtr) this.set(key, val, 0);
 
-        handler this._appendEscaped(str: ptr[array[Char]]) {
-            def i: ArchInt = 0;
-            while str~cnt(i) != 0 {
-                def c: Char = str~cnt(i);
-                if c == '"' this.buf += "\\\""
-                else if c == '\\' this.buf += "\\\\"
-                else if c == '\n' this.buf += "\\n"
-                else if c == '\r' this.buf += "\\r"
-                else if c == '\t' this.buf += "\\t"
-                else if c < ' ' {
-                    def esc: array[Char, 8];
-                    String.assign(esc(0)~ptr, "\\u%04x", c~cast[Int]);
-                    this.buf += esc(0)~ptr~cast[CharsPtr];
-                } else this.buf += c;
-                ++i;
-            }
-        }
+        handler this.set(key: CharsPtr, val: CharsPtr, subKey: CharsPtr) {
+            if this.level < this.logger.logLevel return;
 
-        // A value needs quotes if it is empty or has a char that would break the key=value format.
-        func _needsQuotes(str: ptr[array[Char]]): Bool {
-            if str~cnt(0) == 0 return true;
-            def i: ArchInt = 0;
-            while str~cnt(i) != 0 {
-                def c: Char = str~cnt(i);
-                if c == ' ' or c == '=' or c == '"' or c == '\\' or c < ' ' or c~cast[Int] == 127 return true;
-                ++i;
-            }
-            return false;
-        }
-
-        // Invalid chars (spaces, control chars, '=' and '"') are replaced by '_' and the
-        // first such problem is kept in `error`, which send() returns.
-        handler this._appendKey(key: ptr[array[Char]]) {
-            this.buf += ' ';
-            if key~cnt(0) == 0 {
-                this.buf += '_';
-                this._setError("Logger: empty key replaced by '_'");
-            } else {
-                def invalid: Bool = false;
-                def i: ArchInt = 0;
-                while key~cnt(i) != 0 {
-                    def c: Char = key~cnt(i);
-                    if c == ' ' or c == '=' or c == '"' or c < ' ' or c~cast[Int] == 127 {
-                        this.buf += '_';
-                        invalid = true;
-                    } else this.buf += c;
-                    ++i;
-                }
-                if invalid this._setError("Logger: invalid chars in key replaced by '_'");
-            }
-            this.buf += '=';
-        }
-
-        handler this._setError(message: ptr[array[Char]]) {
-            if this.error.isNull() this.error = GenericError.new(String("LOGGER_INVALID_KEY"), String(message));
-        }
-
-        handler this.str(key: ptr[array[Char]], val: ptr[array[Char]]): ref[Entry] {
-            if this.skip return this;
-            this._appendKey(key);
+            _appendKey(this.logger.buf, key, subKey);
             if _needsQuotes(val) {
-                this.buf += '"';
-                this._appendEscaped(val);
-                this.buf += '"';
-            } else this.buf += val;
-            return this;
+                this.logger.buf += '"';
+                _appendEscaped(this.logger.buf, val);
+                this.logger.buf += '"';
+            } else this.logger.buf += val;
         }
 
-        handler this.num(key: ptr[array[Char]], val: Int[64]): ref[Entry] {
-            if this.skip return this;
-            this._appendKey(key);
-            this.buf += val;
-            return this;
+        handler this.set(key: CharsPtr, val: Int[64]) {
+            if this.level < this.logger.logLevel return;
+
+            _appendKey(this.logger.buf, key);
+            this.logger.buf += val;
         }
 
-        handler this.num(key: ptr[array[Char]], val: Float[64]): ref[Entry] {
-            if this.skip return this;
-            this._appendKey(key);
-            this.buf += val;
-            return this;
+        handler this.set(key: CharsPtr, val: Float[64]) {
+            if this.level < this.logger.logLevel return;
+
+            _appendKey(this.logger.buf, key);
+            this.logger.buf += val;
         }
 
-        handler this.bool(key: ptr[array[Char]], val: Bool): ref[Entry] {
-            if this.skip return this;
-            this._appendKey(key);
-            if val this.buf += "true" else this.buf += "false";
-            return this;
+        handler this.set(key: CharsPtr, val: Bool) {
+            if this.level < this.logger.logLevel return;
+
+            _appendKey(this.logger.buf, key);
+            if val this.logger.buf += "true" else this.logger.buf += "false";
         }
 
-        handler this.msg(message: ptr[array[Char]]): ref[Entry] {
-            return this.str("message", message);
+        handler this.set(key: CharsPtr, val: ref[Error]) {
+            if this.level < this.logger.logLevel return;
+
+            this.set("error", val.getCode(), ".code");
+            this.set("error", val.getMessage(), ".msg");
         }
 
-        // Prints the record. Returns the first key error, or a null ref if there was none.
-        handler this.send(): SrdRef[Error] {
-            if not this.skip Console.print("%s\n", this.buf.string.buf);
-            return this.error;
+        handler this.send() {
+            if this.level < this.logger.logLevel return;
+            Console.print("%s\n", this.logger.buf.string.buf);
         }
     }
 
-    func error(): Entry {
-        return Entry(Level.ERROR);
+    // Member macros
+    //==============
+
+    @member macro error [this, msg] Logger.Entry(this, Logger.Level.ERROR, msg).{
+        send();
+    }
+    @member macro error [this, msg, props] Logger.Entry(this, Logger.Level.ERROR, msg).{
+        preprocess { Logger._insertProps(ast props) }
+        send();
     }
 
-    func warning(): Entry {
-        return Entry(Level.WARNING);
+    @member macro warning [this, msg] Logger.Entry(this, Logger.Level.WARNING, msg).{
+        send();
+    }
+    @member macro warning [this, msg, props] Logger.Entry(this, Logger.Level.WARNING, msg).{
+        preprocess { Logger._insertProps(ast props) }
+        send();
     }
 
-    func info(): Entry {
-        return Entry(Level.INFO);
+    @member macro info [this, msg] Logger.Entry(this, Logger.Level.INFO, msg).{
+        send();
+    }
+    @member macro info [this, msg, props] Logger.Entry(this, Logger.Level.INFO, msg).{
+        preprocess { Logger._insertProps(ast props) }
+        send();
     }
 
-    func debug(): Entry {
-        return Entry(Level.DEBUG);
+    @member macro debug [this, msg] Logger.Entry(this, Logger.Level.DEBUG, msg).{
+        send();
+    }
+    @member macro debug [this, msg, props] Logger.Entry(this, Logger.Level.DEBUG, msg).{
+        preprocess { Logger._insertProps(ast props) }
+        send();
+    }
+
+    func _insertProps (props: ref[Core.Ast.Node]) {
+        use Core.Basic;
+        use Core.Ast;
+
+        if props~ptr == 0 return;
+        if isDerivedFrom[props, List] or isDerivedFrom[props, Bracket] {
+            def container: ContainerOf[props, Node];
+            def i: Word;
+            for i = 0, i < container.getElementCount(), ++i {
+                _insertProps(container.getElement(i));
+            }
+        } else if isDerivedFrom[props, LinkOperator] {
+            def linkContainer: ContainerOf[props, Node];
+            def key: StringLiteral;
+            def keyElement: ref[Node](linkContainer.getElement(0));
+            if isDerivedFrom[keyElement, StringLiteral] {
+                key.value.value = castRef[keyElement, StringLiteral].value.value
+            } else if isDerivedFrom[keyElement, Identifier] {
+                key.value.value = castRef[keyElement, StringLiteral].value.value
+            } else {
+                Spp.buildMgr.raiseBuildNotice("CP1001", 1, keyElement);
+                return;
+            }
+            Spp.astMgr.insertAst(
+                (ast set(key, val)),
+                Srl.Map[String, ref[Node]]()
+                    .set(String("key"), key)
+                    .set(String("val"), linkContainer.getElement(1))
+            );
+        } else {
+            Spp.buildMgr.raiseBuildNotice("CP1001", 1, props);
+        }
     }
 }

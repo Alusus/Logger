@@ -1,0 +1,110 @@
+import "Srl/System";
+import "Srl/Fs";
+import "Srl/Console";
+import "Srl/Array";
+import "Srl/String";
+import "Srl/StringBuilder";
+
+use Srl;
+
+func isDigit(c: Char): Bool {
+    return c >= '0' and c <= '9';
+}
+
+// Checks whether the text at the given position is a timestamp in the form YYYY-MM-DDTHH:MM:SS.
+func isTimestamp(str: CharsPtr, pos: ArchInt): Bool {
+    def pattern: CharsPtr = "dddd-dd-ddTdd:dd:dd";
+    def i: ArchInt;
+    for i = 0, i < 19, ++i {
+        def c: Char = str~cnt(pos + i);
+        if pattern~cnt(i) == 'd' {
+            if not isDigit(c) return false;
+        } else if c != pattern~cnt(i) return false;
+    }
+    return true;
+}
+
+// Replaces the timestamp of every `time=` key with a constant one (the UTC offset is kept since it's
+// deterministic given the TZ env var used when running the examples).
+func normalizeTimestamps(input: String): String {
+    def output: StringBuilder;
+    def len: ArchInt = input.getLength();
+    def i: ArchInt = 0;
+    while i < len {
+        if i + 24 <= len and String.compare(input.buf + i, "time=", 5) == 0
+                and isTimestamp(input.buf, i + 5) {
+            output += "time=1970-01-01T00:00:00";
+            i += 24;
+        } else {
+            output += input.buf~cnt(i);
+            ++i;
+        }
+    }
+    return output.string;
+}
+
+// Error messages start with a path (after optional indentation and `-` markers) followed by the
+// position, e.g. `  - /home/user/project/Logger.alusus (12,5)`. This keeps only the file name.
+func stripPaths(input: String): String {
+    def output: StringBuilder;
+    def len: ArchInt = input.getLength();
+    def i: ArchInt = 0;
+    while i < len {
+        // Copy the indentation and the list markers.
+        while i < len and (input.buf~cnt(i) == ' ' or input.buf~cnt(i) == '-') {
+            output += input.buf~cnt(i);
+            ++i;
+        }
+        // If the line has a path then copy only its last component.
+        if i < len and input.buf~cnt(i) == '/' {
+            def nameStart: ArchInt = i + 1;
+            def end: ArchInt = i;
+            while end < len and input.buf~cnt(end) != ' ' and input.buf~cnt(end) != '\n' {
+                if input.buf~cnt(end) == '/' nameStart = end + 1;
+                ++end;
+            }
+            while nameStart < end {
+                output += input.buf~cnt(nameStart);
+                ++nameStart;
+            }
+            i = end;
+        }
+        // Copy the rest of the line.
+        while i < len and input.buf~cnt(i) != '\n' {
+            output += input.buf~cnt(i);
+            ++i;
+        }
+        if i < len {
+            output += '\n';
+            ++i;
+        }
+    }
+    return output.string;
+}
+
+def files: Array[String]({
+    String("example.alusus"),
+    String("مثال.أسس"),
+});
+
+def i: Int;
+for i = 0, i < files.getLength(), ++i {
+    Console.print("Running: %s\n", files(i).buf);
+    if i == 0 {
+        System.exec(String("echo \">>>>>> ") + files(i) + "\\n\" > result.output");
+    } else {
+        System.exec(String("echo \">>>>>> ") + files(i) + "\\n\" >> result.output");
+    }
+    System.exec(String("LANGUAGE=en TZ=Asia/Dubai alusus ") + files(i) + String(" >> result.output"));
+    System.exec("echo \"\\n\\n\" >> result.output");
+}
+
+def received: String = stripPaths(normalizeTimestamps(Fs.readFile("result.output")));
+def expected: String = stripPaths(normalizeTimestamps(Fs.readFile("expected_result.output")));
+
+if received == expected {
+    Console.print("Test successful,\n");
+} else {
+    Console.print("Test failed,\n");
+}
+

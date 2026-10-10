@@ -1,0 +1,89 @@
+import "Srl/errors";
+import "Apm";
+Apm.importPackage("Alusus/Logger@0.1");
+
+use Srl;
+
+func test {
+    def logger: Logger;
+
+    // Default level is INFO, so debug entries are dropped.
+    logger.debug["not printed"];
+
+    // Levels: debug, info, warning, error.
+    logger.logLevel = Logger.Level.DEBUG;
+    logger.debug["a debug message"];
+    logger.info["an info message"];
+    logger.warning["a warning message"];
+    logger.error["an error message"];
+
+    // Level filtering. Entries below the level are dropped and unknown values are ignored.
+    logger.logLevel = Logger.Level.WARNING;
+    logger.info["not printed"];
+    logger.warning["printed"];
+    logger.logLevel = 123;
+    logger.info["still not printed (123 is ignored, level is still WARNING)"];
+    logger.logLevel = Logger.Level.DEBUG;
+
+    // Properties of every supported type. Keys can be identifiers or string literals.
+    logger.info["value types", {
+        text: "hello",
+        count: 42,
+        ratio: 3.14,
+        enabled: true,
+        disabled: false,
+        "quoted key": "keys with invalid chars are sanitized"
+    }];
+
+    // Values that need quoting or escaping.
+    logger.info["quoting and escaping", {
+        withSpace: "two words",
+        withEquals: "a=b",
+        withQuote: "say \"hi\"",
+        withBackslash: "C:\\temp",
+        withNewline: "line1\nline2",
+        withTab: "a\tb",
+        empty: ""
+    }];
+
+    // Message with characters that need escaping.
+    logger.info["multi word \"quoted\" message\nwith newline"];
+
+    // Global properties are added to every following entry.
+    logger.set["service": "billing"];
+    logger.set[{"port": 8080}];
+    logger.set[(ratio: 0.5)];
+    logger.set["debugMode": true];
+    logger.set[{ region: "eu", replicas: 3 }];
+    logger.info["with global properties"];
+    logger.error["globals combine with entry properties", orderId: 17];
+
+    // Errors can be attached to an entry, which adds errorCode and errorDetails.
+    def err: SrdRef[GenericError] = GenericError.new("E100", "something went wrong");
+    logger.error["failed with error object", (error: err, extra: "value")];
+
+    // Manual entries without the macros.
+    def manual: Logger.Entry(logger, Logger.Level.INFO, "manual entry");
+    manual.set("n", 1);
+    manual.send();
+
+    // Local time (with offset) instead of UTC.
+    logger.useLocalTime = true;
+    logger.info["local time"];
+    logger.useLocalTime = false;
+
+    // Separate loggers keep separate settings.
+    def quiet: Logger;
+    quiet.info["independent logger with default level and no globals"];
+    quiet.debug["not printed"];
+}
+
+test();
+
+func testErrors {
+    def logger: Logger;
+    logger.info["test compiler error", { a: b }];
+    logger.info["test compiler error", { 1: b }];
+}
+
+testErrors();

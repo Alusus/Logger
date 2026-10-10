@@ -1,0 +1,60 @@
+>>>>>> example.alusus
+
+time=2026-10-10T00:48:12+00:00 level=debug message="a debug message"
+time=2026-10-10T00:48:12+00:00 level=info message="an info message"
+time=2026-10-10T00:48:12+00:00 level=warning message="a warning message"
+time=2026-10-10T00:48:12+00:00 level=error message="an error message"
+time=2026-10-10T00:48:12+00:00 level=warning message=printed
+time=2026-10-10T00:48:12+00:00 level=info message="value types" text=hello count=42 ratio=3.140000 enabled=true disabled=false quoted_key="keys with invalid chars are sanitized"
+time=2026-10-10T00:48:12+00:00 level=info message="quoting and escaping" withSpace="two words" withEquals="a=b" withQuote="say \"hi\"" withBackslash="C:\\temp" withNewline="line1\nline2" withTab="a\tb" empty=""
+time=2026-10-10T00:48:12+00:00 level=info message="multi word \"quoted\" message\nwith newline"
+time=2026-10-10T00:48:12+00:00 level=info message="with global properties" service=billing port=8080 ratio=0.500000 debugMode=true region=eu replicas=3
+time=2026-10-10T00:48:12+00:00 level=error message="globals combine with entry properties" service=billing port=8080 ratio=0.500000 debugMode=true region=eu replicas=3 orderId=17
+time=2026-10-10T00:48:12+00:00 level=error message="failed with error object" service=billing port=8080 ratio=0.500000 debugMode=true region=eu replicas=3 error.code=E100 error.msg="something went wrong" extra=value
+time=2026-10-10T00:48:12+00:00 level=info message="manual entry" service=billing port=8080 ratio=0.500000 debugMode=true region=eu replicas=3 n=true
+time=2026-10-10T04:48:12+04:00 level=info message="local time" service=billing port=8080 ratio=0.500000 debugMode=true region=eu replicas=3
+time=2026-10-10T00:48:12+00:00 level=info message="independent logger with default level and no globals"
+[0;31mERROR CP1001: Parser syntax error.[0m
+  - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/example.alusus (86,42)
+    - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Logger.alusus (226,46)
+      /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/example.alusus (86,5)
+[0;31mERROR SPPA1007: Unknown symbol.[0m
+  - - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/example.alusus (85,45)
+      - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Logger.alusus (226,46)
+        /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/example.alusus (85,5)
+    - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Logger.alusus (262,31)
+      - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Logger.alusus (226,9)
+        /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/example.alusus (85,5)
+
+
+
+>>>>>> مثال.أسس
+
+time=2026-10-10T00:48:13+00:00 level=debug message="رسالة تنقيح"
+time=2026-10-10T00:48:13+00:00 level=info message="رسالة معلومات"
+time=2026-10-10T00:48:13+00:00 level=warning message="رسالة تحذير"
+time=2026-10-10T00:48:13+00:00 level=error message="رسالة خطأ"
+time=2026-10-10T00:48:13+00:00 level=warning message=ستُطبع
+time=2026-10-10T00:48:13+00:00 level=info message="أنواع القيم" نص=مرحبا عدد=42 نسبة=3.140000 تفعيل=true تعطيل=false مفتاح_باقتباس="المفاتيح ذات المحارف غير الصالحة يجري تعديلها"
+time=2026-10-10T00:48:13+00:00 level=info message="علامات الاقتباس والتهريب" مع_مسافة="كلمتان اثنتان" مع_مساواة="أ=ب" مع_اقتباس="قل \"مرحبا\"" مع_شارحة_مائلة="C:\\temp" مع_سطر_جديد="سطر1\nسطر2" مع_إزاحة="أ\tب" فارغة=""
+time=2026-10-10T00:48:13+00:00 level=info message="رسالة من عدة كلمات \"بين اقتباس\"\nوفيها سطر جديد"
+time=2026-10-10T00:48:13+00:00 level=info message="مع خصائص عامة" خدمة=فوترة منفذ=8080 نسبة=0.500000 نمط_التنقيح=true المنطقة=eu النسخة=3
+time=2026-10-10T00:48:13+00:00 level=error message="الخصائص العامة تُدمج مع خصائص السجل" خدمة=فوترة منفذ=8080 نسبة=0.500000 نمط_التنقيح=true المنطقة=eu النسخة=3 رقم_الطلب=17
+time=2026-10-10T00:48:13+00:00 level=error message="فشل مع كائن خطأ" خدمة=فوترة منفذ=8080 نسبة=0.500000 نمط_التنقيح=true المنطقة=eu النسخة=3 error.code=E100 error.msg="حدث خطأ ما" إضافي=قيمة
+time=2026-10-10T00:48:13+00:00 level=info message="سجل يدوي" خدمة=فوترة منفذ=8080 نسبة=0.500000 نمط_التنقيح=true المنطقة=eu النسخة=3 ن=true
+time=2026-10-10T04:48:13+04:00 level=info message="الوقت المحلي" خدمة=فوترة منفذ=8080 نسبة=0.500000 نمط_التنقيح=true المنطقة=eu النسخة=3
+time=2026-10-10T00:48:13+00:00 level=info message="مسجل مستقل بمستواه الافتراضي وبدون خصائص عامة"
+[0;31mERROR CP1001: Parser syntax error.[0m
+  - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/مثال.أسس (87,41)
+    - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Logger.alusus (226,46)
+      /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/مثال.أسس (87,5)
+[0;31mERROR SPPA1007: Unknown symbol.[0m
+  - - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/مثال.أسس (86,44)
+      - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Logger.alusus (226,46)
+        /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/مثال.أسس (86,5)
+    - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Logger.alusus (262,31)
+      - /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Logger.alusus (226,9)
+        /سرمد/مشاريع/لـغة_الأسس/مـكتبات_خارجية/مـسجل/Examples/مثال.أسس (86,5)
+
+
+
