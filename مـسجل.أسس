@@ -1,0 +1,29 @@
+اشمل "Logger.alusus"؛
+
+عرف مـسجل: لقب Logger؛
+@دمج صنف مـسجل {
+    عرف مـستوى: {
+        عرف خـطأ: لقب Logger.Level.ERROR؛
+        عرف تـحذير: لقب Logger.Level.WARNING؛
+        عرف مـعلومات: لقب Logger.Level.INFO؛
+        عرف تـنقيح: لقب Logger.Level.DEBUG؛
+    }
+
+    عرف استخدم_الوقت_المحلي: لقب useLocalTime؛
+    عرف مستوى_التسجيل: لقب logLevel؛
+    عرف اسم_المستوى: لقب levelName؛
+
+    عرف حدد: لقب set؛
+    عرف فرغ: لقب clear؛
+
+    عرف مـدخل: لقب Entry؛
+    @دمج صنف مـدخل {
+        عرف حدد: لقب set؛
+        عرف أرسل: لقب send؛
+    }
+
+    عرف خطأ: لقب error؛
+    عرف تحذير: لقب warning؛
+    عرف معلومات: لقب info؛
+    عرف تنقيح: لقب debug؛
+}
