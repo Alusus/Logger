@@ -103,8 +103,7 @@ def received: String = stripPaths(normalizeTimestamps(Fs.readFile("result.output
 def expected: String = stripPaths(normalizeTimestamps(Fs.readFile("expected_result.output")));
 
 if received == expected {
-    Console.print("Test successful,\n");
+    Console.print("Test successful\n");
 } else {
-    Console.print("Test failed,\n");
+    Console.print("Test failed\n");
 }
-

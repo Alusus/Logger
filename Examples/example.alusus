@@ -83,7 +83,7 @@ test();
 func testErrors {
     def logger: Logger;
     logger.info["test compiler error", { a: b }];
-    logger.info["test compiler error", { 1: b }];
+    logger.info["test compiler error", { 1: b, a -> "b" }];
 }
 
 testErrors();

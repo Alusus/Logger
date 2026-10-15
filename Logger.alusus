@@ -247,6 +247,11 @@ class Logger {
                 _insertProps(container.getElement(i));
             }
         } else if isDerivedFrom[props, LinkOperator] {
+            def opType: ref[TiStr](castRef[BindingOf[props].getMember("type"), TiStr]);
+            if opType.value != ":" {
+                Spp.buildMgr.raiseBuildNotice("CP1001", 1, props);
+                return;
+            }
             def linkContainer: ContainerOf[props, Node];
             def key: StringLiteral;
             def keyElement: ref[Node](linkContainer.getElement(0));
